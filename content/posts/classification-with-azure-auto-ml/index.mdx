@@ -1,0 +1,182 @@
+---
+title: "Classification with Azure AutoML"
+date: 2019-08-18
+slug: "/classification-with-azure-automl"
+canonicalUrl: "https://jesskanedev-classification-with-azure-automl.com"
+---
+
+Today’s post covers how to use Azure AutoML to solve a classification problem. We will cover the following:
+
+1.  Problem statement and data assumptions
+2.  Setup Azure resources
+3.  Setup and run the experiment
+4.  Review and deploy the best model
+5.  Use Jupyter notebooks to integrate with the scoring endpoint and make new predictions
+
+This is a very straightforward process and only requires a few minutes of configuration – most of your time will be spent waiting for the model to train itself while you are free to go for coffee 🙂
+
+## 1. Problem statement and data assumptions
+
+We will be using Microsoft’s Adventure Works Cycles data set to predict whether a customer will purchase a new bike. We have a CSV file with >16,000 rows to train on, which looks as follows:
+
+![Training data screenshot](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/ExampleData.png?resize=1556%2C576&ssl=1)
+>*Snapshot of training data – note that this contains values for BikeBuyer, which is the value we will try to predict. Classification is an example of  **supervised learning**, which means the algorithm is trained on labelled data to come up with an input-output mapping. The mapping can then be applied to entries where the BikeBuyer value is not already known.*
+
+If you want to have a closer look at the data before continuing, you can access a copy [here](https://raw.githubusercontent.com/jesskanedev/jesskanedev-blog/master/ClassificationWithAzureAutoML/AdventureWorksCustomerData.csv).
+
+To keep life simple, we are going to assume that the data is in a reasonably clean state – no duplicates, missing values, or mismatched data types. We will also rely on intuition to say that features such as gender, number of cars owned, and yearly income might be useful predictors of whether a person will buy a bike. On the other hand, features such as name, street address, and telephone number may  **not** very useful and could therefore be ignored.
+
+## 2. Set up required Azure resources
+
+Start by setting up a new resource group, so all of the resources for your AutoML workspace will be grouped together:
+
+![Screenshot of Azure 'Create Resource Group'](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/NewResourceGroup-1.png?resize=500%2C207&ssl=1)
+
+![Screenshot of Azure 'Create Resource Group'](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/SetUpResouorceGroup.png?resize=943%2C384&ssl=1)
+
+Next, create a new  **Machine Learning Service Workspace**:
+
+![Screenshot of Azure 'Create Machine Learning Service Workspace'](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/2.3.1.CreateWorkspace-2.png?resize=828%2C319&ssl=1)
+
+![Screenshot of Azure 'Create Machine Learning Service Workspace'](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateWorkspace.png?resize=805%2C533&ssl=1)
+
+![Screenshot of Azure 'Create Machine Learning Service Workspace'](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateWorkspace2.png?resize=916%2C466&ssl=1)
+
+![Screenshot of Azure 'Create Machine Learning Service Workspace'](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateWorkspace3-1.png?resize=851%2C441&ssl=1)
+
+This will take a couple of minutes to set up, but once it has completed, your workspace is ready to go – easy!
+
+## 3. Set up the experiment
+
+From the workspace dashboard, select  **Create a new Automated Machine Learning Model**, then  **Create Experiment**:
+
+![Screenshot of Azure 'Create Automated Machine Learning Model'](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/WorkspaceDashboard.png?fit=1024%2C481&ssl=1)
+
+![Screenshot of Azure 'Create Automated Machine Learning Model'](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateExperiment.png?resize=300%2C132&ssl=1)
+
+Give your experiment a name, and select a compute for it. If you don’t already have any compute options configured, just use the ‘Create new compute’ link highlighted below.
+
+![Screenshot of Azure 'Create Automated Machine Learning Experiment'](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateExperiment2-1.png?resize=888%2C387&ssl=1)
+
+![Screenshot of Azure 'Create New Compute'](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateCompute.png?resize=571%2C404&ssl=1)
+>*This sidebar displays when you select to create a new compute. If you need to worry about pricing, you can view  [this guide](https://azure.microsoft.com/en-us/pricing/details/machine-learning-service/) to determine what your selected VM size will cost you. If you leave ‘Minimum number of nodes’ at 0, you will not be charged when the compute is not in use, but you will lose data profiling capabilities.*
+
+Once this is done, you can upload your data set, either from an Azure storage account or by uploading a file. We are going to upload the CSV we examined in Step 1. Once you have uploaded it, select it by clicking on the entry that appears.
+
+![Screenshot of Azure 'Create Automated Machine Learning Experiment'](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/UploadData.png?fit=1024%2C464&ssl=1)
+>*The AdventureWorksCustomerData.csv file has been uploaded using the highlighted ‘Upload’ button. Once uploaded, it is available to select (blue highlighted row).*
+
+Once selected, your CSV should show up on the screen as follows:
+
+![Screenshot of CSV column selection](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/SelectedCsvView.png?resize=852%2C655&ssl=1)
+
+Configure which columns you think the algorithm should factor in by using the ‘Included’ toggle. For the Adventure Works data set, we are going to keep the following columns:
+-   City
+-   StateProvinceName
+-   CountryRegionName
+-   BirthDate
+-   Education
+-   Occupation
+-   Gender
+-   MaritalStatus
+-   HomeOwnerFlag
+-   NumberCarsOwned
+-   NumberChildrenAtHome
+-   TotalChildren
+-   YearlyIncome
+-   BikeBuyer  _(our prediction column, or ‘label’)_
+
+Which means we will exclude the following columns by toggling them to ignored:
+-   CustomerId
+-   Title
+-   FirstName
+-   MiddleName
+-   LastName
+-   Suffix
+-   AddressLine1
+-   AddressLine2
+-   PostalCode
+-   PhoneNumber
+
+![Screenshot of ignored CSV columns](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/IgnoreUnwantedColumns.png?resize=801%2C650&ssl=1)
+
+Next, select your prediction task and target column. In our case, we want to predict whether a customer will purchase a new bike. This makes it a binary  **Classification** task, as we are looking for an answer that will fit into either a ‘Yes’ or ‘No’ category. The target column will be  **BikeBuyer**.
+
+![Snapshot of prediction task and target column selector](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/DefineTask.png?resize=807%2C659&ssl=1)
+
+Next, it is worth opening up the Advanced Settings area. This gives us extra options for selecting our primary performance metric, whether we want to do any preprocessing of the data, when to stop training, what type of cross validation to perform, and which algorithms we could safely ignore to save time. This is where some background knowledge in machine learning can help you tune for top performance – for the sake of simplicity, we will leave these as defaults for now and see how we go.
+
+![Snapshot of 'Advanced Settings'](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/PerformanceMetric-1.png?resize=521%2C542&ssl=1)
+
+Now you are ready to hit the  **Start** button and get the experiment going! This will take you to the Run screen, where you can monitor which models are being tested and how well they are doing. For the Adventure Works data set, this will take about 40 minutes to complete.
+
+![Snapshot of 'Run experiment' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/StartExperiment.png?resize=502%2C242&ssl=1)
+
+![Snapshot of 'Run Detail' screen](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/RunDetails.png?resize=1380%2C805&ssl=1)
+
+## 4. Review and deploy the best model
+
+Once the run has completed, you can see the best model in the iterations list:
+
+![Snapshot of model iterations list](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/BestModel-2.png?resize=924%2C333&ssl=1)
+
+Clicking through, you will see charts that demonstrate performance against several different metrics. We are seeing accuracy of 0.8 and a weighted AUC of 0.87, which indicate that this model is performing reasonably well. You will also see options to download and deploy the model.
+
+![Snapshot of 'Performance Metrics' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/Metrics.png?fit=1024%2C536&ssl=1)
+
+Hit the  **Deploy model**  button, give it a name and description, then  **Deploy**. This process can take approximately 20 minutes to complete.
+
+![Snapshot of 'Deploy Model' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/DeployModel.png?resize=750%2C601&ssl=1)
+>*The Deploy model interface. The Scoring script has code to perform predictions on new input data. The Environment script has code to run the web service the model will be published to. Both of these are required to generate the image for deployment, so leave them as Auto generate unless you really know what you are doing.*
+
+Once the deployment is complete, you will see a success message, as well as a couple of new services in your Azure resource group. We will look at these in more detail another time. For now, your model is deployed and ready to make new predictions!
+
+![Snapshot of 'Deployment succeeded' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/DeployModelSuccessMessage.png?resize=230%2C261&ssl=1)
+
+## 5. Integrate with the scoring endpoint to make a new prediction
+
+There are several ways you can integrate with your model to make new predictions. For today, we will do a quick ping test using Jupyter Notebooks and Python.
+
+Go back to your workspace dashboard, and select  **Get Started with Sample Notebooks**:
+
+![Snapshot of Azure 'Get started with sample notebooks' screen](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/SelectJupyterNotebook.png?fit=1024%2C486&ssl=1)
+
+If you don’t already have one, you will need to create a new notebook VM. Click  **New** and continue through the dialog.
+
+![Snapshot of 'Create notebook VM' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/CreateNewNotebookVM.png?resize=935%2C485&ssl=1)
+
+![Snapshot of 'Create notebook VM' screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/5.3.CreateNewNotebookVM-1.png?resize=521%2C279&ssl=1)
+
+A new notebook VM will show up in the list. Click through to  **JupyterLab**, which will take you to the Notebook Launcher screen. From here, click through to  **Python 3.6**  under the  **Notebook**  heading. Your brand new Jupyter notebook will open up, ready to rock and roll 😀
+
+![Snapshot of Notebook VMs list](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/5.4.NavigateToJupyterLab.png?resize=953%2C198&ssl=1)
+
+![Snapshot of Notebook Launcher](https://i0.wp.com/jesskanedev.com/wp-content/uploads/2019/08/5.5.NotebookLauncher-1.png?resize=366%2C528&ssl=1)
+
+![Jupyter notebook interface](https://i2.wp.com/jesskanedev.com/wp-content/uploads/2019/08/5.6.Notebook.png?fit=1024%2C627&ssl=1)
+
+An example notebook is embedded below, which details the steps and code to connect to your model and send up a request to get back a prediction – feel free to review and copy-paste into your own environment as needed:
+
+<iframe src="https://jesskanedev.com/wp-content/uploads/2019/08/AdventureWorksClassificationChallenge.html" width="100%" height="600px" frameborder="0" allowfullscreen="allowfullscreen"></iframe>
+
+One last thing to note is that on the first run, you may see a message asking you to authenticate – you will need to navigate to the web address in the message, and input the code it provides you:
+
+Performing interactive authentication. Please follow the instructions on the terminal.
+To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code ********* to authenticate.
+
+![Enter authentication code screen](https://i1.wp.com/jesskanedev.com/wp-content/uploads/2019/08/5.8.EnterCode.png?resize=431%2C335&ssl=1)
+
+## In conclusion
+
+There are loads of improvements we can make from here, including
+
+-   A proper data analysis phase – for example, we can do better than guesswork to decide which features to include
+-   Tuning against different performance metrics
+-   Understanding the algorithms AutoML uses during model training, and why some are better suited to classification problems than others
+-   Understanding the Azure resources that were provisioned, and why
+-   Integration with the model directly in Jupyter, rather on relying on the scoring endpoint to be available
+-   A nicer way of performing new predictions, for example, via a web interface
+
+Consider though, that in this post we have configured, trained, deployed, and integrated with a classification model using Azure AutoML – pretty awesome, and not a bad place to call it a day.
+
+_All resources for this post can be found at my_ [_GitHub account_](https://github.com/jesskanedev/jesskanedev-blog/tree/master/ClassificationWithAzureAutoML)_. Thanks for reading!_
