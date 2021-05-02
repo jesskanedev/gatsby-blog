@@ -20,6 +20,10 @@ module.exports = {
             slug: `/blog`,
           },
           {
+            title: `Reviews`,
+            slug: `/reviews`,
+          },
+          {
             title: `About`,
             slug: `/about`,
           },
@@ -36,7 +40,7 @@ module.exports = {
           {
             name: `GitHub`,
             url: `https://github.com/jesskanedev`,
-          },
+          }
         ],
       },
     },
